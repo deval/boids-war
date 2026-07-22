@@ -10,6 +10,10 @@ class Boid extends V2D {
 		this.stamina = this.sp.maxStamina;
 		this.exhausted = false;
 
+		this.dead = false;
+		this.health = 100; // decay remaining while dead, 100 → 0
+		this.eatTimer = 0; // eat cooldown left, in frame units; > 0 = eating
+
 		this.shape = new PIXI.Graphics();
 		this.border = new PIXI.Graphics();
 		this.area = new PIXI.Graphics();
@@ -44,6 +48,7 @@ class Boid extends V2D {
 
 		const follow = sp.follow;
 		const avoid = sp.avoid;
+		const hunt = sp.hunt;
 
 		const simple = sp.visionShape === 0 && sp.visionOffset === 0;
 		const sqVis = sp.vision * sp.vision;
@@ -64,7 +69,14 @@ class Boid extends V2D {
 		for (const c of cands) {
 			for (; i < c.length; i += step) {
 				if (this === c[i]) continue;
-				if (!follow[c[i].si] && !avoid[c[i].si]) continue;
+				// hunted species only become visible as corpses; chasing live
+				// prey is still the follow relation's job
+				if (
+					!follow[c[i].si] &&
+					!avoid[c[i].si] &&
+					!(hunt[c[i].si] && c[i].dead)
+				)
+					continue;
 
 				if (simple) {
 					const d = this.sqrDist(c[i]);
@@ -96,6 +108,7 @@ class Boid extends V2D {
 		const sp = this.sp;
 		const follow = sp.follow;
 		const avoid = sp.avoid;
+		const hunt = sp.hunt;
 
 		const aln = new V2D();
 		const csn = new V2D();
@@ -107,13 +120,31 @@ class Boid extends V2D {
 		let nf = 0;
 		let na = 0;
 		let i = 0;
+		let corpse = null;
+		let corpseD = Infinity;
 		for (const other of ns) {
 			const d = 1 / (ds[i] || 0.00001);
 
+			// remember the nearest edible corpse; if one is in sight it takes
+			// priority over flocking below
+			if (
+				hunt[other.si] &&
+				other.dead &&
+				other.health > 0 &&
+				ds[i] < corpseD
+			) {
+				corpse = other;
+				corpseD = ds[i];
+			}
+
 			if (follow[other.si]) {
-				// alignment is the average of velocity * bias strength ^ dot
-				const b = sp.bias ** other.vel.dot(this.vel);
-				aln.sclAdd(other.vel, b);
+				// corpses are still gathered around (cohesion/separation) but
+				// their drifting velocity is not worth aligning with
+				if (!other.dead) {
+					// alignment is the average of velocity * bias strength ^ dot
+					const b = sp.bias ** other.vel.dot(this.vel);
+					aln.sclAdd(other.vel, b);
+				}
 
 				// cohesion finds the average of positions
 				csn.add(other);
@@ -151,6 +182,21 @@ class Boid extends V2D {
 		}
 
 		if (na > 0) flee.setMag(sp.maxSpeed).sub(this.vel).max(sp.maxForce);
+
+		// eating beats flocking: seek the corpse instead of following the
+		// flock, keeping only the flee force so avoided species still repel.
+		// The steer gets double the normal force cap so hunters turn onto a
+		// corpse decisively even from a nearly opposite heading
+		if (corpse) {
+			const seek = V2D.sub(corpse, this)
+				.setMag(sp.maxSpeed)
+				.sub(this.vel)
+				.max(2 * sp.maxForce);
+
+			this.acc.sclAdd(seek, 2);
+			this.acc.sclAdd(flee, sp.avoidForce);
+			return;
+		}
 
 		this.acc.sclAdd(aln, sp.alignment);
 		this.acc.sclAdd(csn, sp.cohesion);
@@ -195,51 +241,65 @@ class Boid extends V2D {
 	update() {
 		const sp = this.sp;
 
-		if (opt.avoidEdges && opt.edgeMargin > 0) {
-			const m = opt.edgeMargin;
-			// linear ramp from 0 at the margin boundary; the peak is sized so
-			// the ramp's work over the band is double what's needed to stop a
-			// maxSpeed boid hitting the edge head-on
-			const f = (2 * sp.maxSpeed * sp.maxSpeed) / (m * m);
-			if (this.x < m) this.acc.x += (m - this.x) * f;
-			else if (this.x > g.width - m)
-				this.acc.x -= (this.x - (g.width - m)) * f;
-			if (this.y < m) this.acc.y += (m - this.y) * f;
-			else if (this.y > g.height - m)
-				this.acc.y -= (this.y - (g.height - m)) * f;
+		if (this.dead) {
+			// corpses only drift: no steering, noise, or speed clamps, so a
+			// bite's knockback can exceed maxSpeed and bleed off through drag
+			// (floored so it always decays); integration and edge handling
+			// below stay shared
+			this.vel.mult(1 - Math.max(sp.drag, 0.02));
+		} else {
+			if (opt.avoidEdges && opt.edgeMargin > 0) {
+				const m = opt.edgeMargin;
+				// linear ramp from 0 at the margin boundary; the peak is sized
+				// so the ramp's work over the band is double what's needed to
+				// stop a maxSpeed boid hitting the edge head-on
+				const f = (2 * sp.maxSpeed * sp.maxSpeed) / (m * m);
+				if (this.x < m) this.acc.x += (m - this.x) * f;
+				else if (this.x > g.width - m)
+					this.acc.x -= (this.x - (g.width - m)) * f;
+				if (this.y < m) this.acc.y += (m - this.y) * f;
+				else if (this.y > g.height - m)
+					this.acc.y -= (this.y - (g.height - m)) * f;
+			}
+
+			this.vel.sclAdd(this.acc, g.delta);
+
+			if (sp.drag) this.vel.mult(1 - sp.drag);
+
+			if (sp.noise) {
+				const r = (Math.PI / 80) * sp.noise;
+				this.vel.rotate(random(-r, r));
+			}
+
+			if (sp.minSpeed) {
+				if (this.vel.sqrMag() === 0) this.vel.random(sp.minSpeed);
+				else this.vel.min(sp.minSpeed);
+			}
+
+			this.vel.max(sp.maxSpeed);
+
+			// after the min clamp, so exhaustion wins even when minSpeed > 25%
+			if (this.exhausted) this.vel.max(0.25 * sp.maxSpeed);
+
+			if (sp.staminaDrain) {
+				const ratio = sp.maxSpeed ? this.vel.mag() / sp.maxSpeed : 0;
+				if (ratio > 0.5)
+					this.stamina -=
+						sp.staminaDrain * ((ratio - 0.5) / 0.5) * g.delta;
+				else this.stamina += sp.staminaFill * g.delta;
+				this.stamina = constrain(this.stamina, 0, sp.maxStamina);
+				if (this.stamina <= 0 && !this.exhausted) {
+					this.exhausted = true;
+					this.vel.max(0.25 * sp.maxSpeed);
+				} else if (this.stamina >= sp.maxStamina) this.exhausted = false;
+			} else this.exhausted = false;
+
+			// eating pins the eater at min speed until the cooldown runs out
+			if (this.eatTimer > 0) {
+				this.eatTimer -= g.delta;
+				this.vel.max(sp.minSpeed);
+			}
 		}
-
-		this.vel.sclAdd(this.acc, g.delta);
-
-		if (sp.drag) this.vel.mult(1 - sp.drag);
-
-		if (sp.noise) {
-			const r = (Math.PI / 80) * sp.noise;
-			this.vel.rotate(random(-r, r));
-		}
-
-		if (sp.minSpeed) {
-			if (this.vel.sqrMag() === 0) this.vel.random(sp.minSpeed);
-			else this.vel.min(sp.minSpeed);
-		}
-
-		this.vel.max(sp.maxSpeed);
-
-		// after the min clamp, so exhaustion wins even when minSpeed > 25%
-		if (this.exhausted) this.vel.max(0.25 * sp.maxSpeed);
-
-		if (sp.staminaDrain) {
-			const ratio = sp.maxSpeed ? this.vel.mag() / sp.maxSpeed : 0;
-			if (ratio > 0.5)
-				this.stamina -=
-					sp.staminaDrain * ((ratio - 0.5) / 0.5) * g.delta;
-			else this.stamina += sp.staminaFill * g.delta;
-			this.stamina = constrain(this.stamina, 0, sp.maxStamina);
-			if (this.stamina <= 0 && !this.exhausted) {
-				this.exhausted = true;
-				this.vel.max(0.25 * sp.maxSpeed);
-			} else if (this.stamina >= sp.maxStamina) this.exhausted = false;
-		} else this.exhausted = false;
 
 		this.sclAdd(this.vel, g.delta);
 
@@ -269,7 +329,10 @@ class Boid extends V2D {
 		this.shape = this.getShape();
 		this.shape.x = this.x;
 		this.shape.y = this.y;
-		this.shape.rotation = this.vel.angle();
+		// a corpse that has drifted to a stop keeps its last heading instead
+		// of snapping to angle 0
+		if (!this.dead || this.vel.sqrMag() > 0.01)
+			this.shape.rotation = this.vel.angle();
 
 		// the area gets the boid's position and heading but never its
 		// squash-and-stretch scale, so it always shows the true vision shape
@@ -277,7 +340,7 @@ class Boid extends V2D {
 		this.area.y = this.y;
 		this.area.rotation = this.shape.rotation;
 
-		if (opt.stretch) {
+		if (opt.stretch && !this.dead) {
 			const t = constrain(this.vel.mag() / sp.maxSpeed, 0, 1);
 			const w = 1.4 - 0.9 * t;
 			this.shape.scale.y = w;
@@ -295,13 +358,25 @@ class Boid extends V2D {
 		this.border.scale.x = this.shape.scale.x;
 		this.border.scale.y = this.shape.scale.y;
 
-		if (opt.hues)
-			this.shape.tint = hsv(
-				constrain(this.vel.mag() / (sp.maxSpeed * 2), 0, 1),
-				1,
-				1
-			);
-		else this.shape.tint = 0xffffff;
+		if (this.dead) {
+			// corpses darken and fade out as they get eaten
+			this.shape.tint = 0x804040;
+			this.shape.alpha = 0.15 + (0.65 * this.health) / 100;
+			this.border.alpha = this.shape.alpha;
+		} else {
+			// getShape only sets alpha on rebuild, so undo any corpse fade
+			this.shape.alpha = 0.8;
+			this.border.alpha = 0.9;
+
+			if (this.eatTimer > 0) this.shape.tint = 0xff9060;
+			else if (opt.hues)
+				this.shape.tint = hsv(
+					constrain(this.vel.mag() / (sp.maxSpeed * 2), 0, 1),
+					1,
+					1
+				);
+			else this.shape.tint = 0xffffff;
+		}
 
 		if (opt.desired && this.acc.sqrMag() > 0.01) {
 			this.desired.alpha = 0.5;

@@ -57,7 +57,10 @@ const opt = (() => {
 		noise: 1,
 		maxStamina: 100,
 		staminaDrain: 0.25,
-		staminaFill: 0.5
+		staminaFill: 0.5,
+		eatCooldown: 1.5,
+		eatImpact: 16,
+		decay: 25
 	};
 
 	const perSpecies = new Set(Object.keys(speciesDefaults));
@@ -71,7 +74,8 @@ const opt = (() => {
 	function defaultSpecies() {
 		return Object.assign({}, speciesDefaults, {
 			follow: [true],
-			avoid: [false]
+			avoid: [false],
+			hunt: [false]
 		});
 	}
 
@@ -149,6 +153,7 @@ const opt = (() => {
 		const out = Object.assign(defaultSpecies(), s);
 		out.follow = arr.map((_, j) => !!(s.follow?.[j] ?? j === i));
 		out.avoid = arr.map((_, j) => !!s.avoid?.[j]);
+		out.hunt = arr.map((_, j) => !!s.hunt?.[j]);
 		return out;
 	}
 
@@ -370,7 +375,7 @@ const opt = (() => {
 
 			row.append(swatch, name);
 
-			for (const kind of ["follow", "avoid"]) {
+			for (const kind of ["follow", "avoid", "hunt"]) {
 				const box = document.createElement("input");
 				box.type = "checkbox";
 				box.id = `${kind}-${i}`;
@@ -426,9 +431,11 @@ const opt = (() => {
 			for (const s of data.species) {
 				s.follow.push(false);
 				s.avoid.push(false);
+				s.hunt.push(false);
 			}
 			copy.follow.push(true);
 			copy.avoid.push(false);
+			copy.hunt.push(false);
 			copy.color = palette[n % palette.length];
 
 			data.species.push(copy);
@@ -445,6 +452,7 @@ const opt = (() => {
 			for (const s of data.species) {
 				s.follow.splice(i, 1);
 				s.avoid.splice(i, 1);
+				s.hunt.splice(i, 1);
 			}
 			if (data.sel >= data.species.length)
 				data.sel = data.species.length - 1;

@@ -133,8 +133,10 @@
 				<span class="tooltip">
 					?
 					<span class="tip">
-						which species this species flocks together with (follow)
-						and which it flees from (avoid).
+						which species this species flocks together with (follow),
+						which it flees from (avoid), and which it preys on
+						(hunt): touching prey from behind kills it, and touching
+						the corpse takes a bite out of it.
 					</span>
 				</span>
 			</p>
@@ -416,6 +418,64 @@
 				step="0.05"
 				data-model="staminaFill"
 				data-digits="2"
+			/>
+
+			<h4>hunting</h4>
+
+			<p>
+				eat cooldown <span data-show="eatCooldown"></span>s
+				<span class="tooltip">
+					?
+					<span class="tip">
+						how long a boid of this species is stuck eating after
+						biting a corpse, slowed to its min speed.
+					</span>
+				</span>
+			</p>
+			<input
+				type="range"
+				min="0"
+				max="10"
+				step="0.1"
+				data-model="eatCooldown"
+				data-digits="1"
+			/>
+
+			<p>
+				eat impact <span data-show="eatImpact"></span>
+				<span class="tooltip">
+					?
+					<span class="tip">
+						how hard this species' bite knocks a corpse away.
+					</span>
+				</span>
+			</p>
+			<input
+				type="range"
+				min="0"
+				max="40"
+				step="1"
+				data-model="eatImpact"
+				data-digits="0"
+			/>
+
+			<p>
+				bite decay <span data-show="decay"></span>%
+				<span class="tooltip">
+					?
+					<span class="tip">
+						how much of a corpse of this species each bite consumes;
+						the corpse disappears when it reaches 0%.
+					</span>
+				</span>
+			</p>
+			<input
+				type="range"
+				min="1"
+				max="100"
+				step="1"
+				data-model="decay"
+				data-digits="0"
 			/>
 
 			<h4>world</h4>

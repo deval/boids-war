@@ -169,6 +169,16 @@ class Boid extends V2D {
 		this.shape.y = this.y;
 		this.shape.rotation = this.vel.angle();
 
+		if (opt.stretch) {
+			const t = constrain(this.vel.mag() / opt.maxSpeed, 0, 1);
+			const w = 1.4 - 0.9 * t;
+			this.shape.scale.y = w;
+			this.shape.scale.x = 1 / w;
+		} else {
+			this.shape.scale.x = 1;
+			this.shape.scale.y = 1;
+		}
+
 		if (opt.hues)
 			this.shape.tint = hsv(
 				constrain(this.vel.mag() / (opt.maxSpeed * 2), 0, 1),

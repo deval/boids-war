@@ -199,6 +199,44 @@
 				data-model="vision"
 			/>
 
+			<p>
+				vision shape
+				<span class="tooltip">
+					?
+					<span class="tip">
+						the shape of the area each boid can see other boids in;
+						triangles point along the boid's heading.
+					</span>
+				</span>
+			</p>
+			<select data-model="visionShape">
+				<option value="0">circle</option>
+				<option value="1">rectangle</option>
+				<option value="2">triangle (points forward)</option>
+				<option value="3">triangle (points backward)</option>
+			</select>
+
+			<p>
+				vision offset
+				<span class="tooltip">
+					?
+					<span class="tip">
+						shifts the vision area along the boid's heading: positive
+						values move it in front of the boid, negative values
+						behind it.
+					</span>
+				</span>
+				<span data-show="visionOffset"></span>
+			</p>
+			<input
+				type="range"
+				min="-1"
+				max="1"
+				step="0.05"
+				data-model="visionOffset"
+				data-digits="2"
+			/>
+
 			<p>alignment force <span data-show="alignment"></span></p>
 			<input
 				type="range"

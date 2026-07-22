@@ -30,6 +30,8 @@ const opt = (() => {
 		accuracyPower: 5,
 		accuracy: 32,
 		vision: 25,
+		visionShape: 0,
+		visionOffset: 0,
 		alignment: 1.1,
 		bias: 1.5,
 		cohesion: 1,
@@ -62,6 +64,9 @@ const opt = (() => {
 		particle: "j",
 		accuracyPower: "k",
 		vision: "l",
+		// a-z is exhausted; new settings use uppercase codes
+		visionShape: "A",
+		visionOffset: "B",
 		alignment: "m",
 		bias: "n",
 		cohesion: "o",
@@ -86,6 +91,7 @@ const opt = (() => {
 	const sliders = document.body.querySelectorAll(
 		"input[type=range][data-model]"
 	);
+	const selects = document.body.querySelectorAll("select[data-model]");
 
 	for (const el of checks) {
 		el.addEventListener("input", e => {
@@ -127,9 +133,17 @@ const opt = (() => {
 					? Math.floor(data.accuracy)
 					: "∞";
 				return;
-			} else if (model === "vision") g.shapeMode++;
+			} else if (model === "vision" || model === "visionOffset")
+				g.shapeMode++;
 
 			updateShow(el, model);
+		});
+	}
+
+	for (const el of selects) {
+		el.addEventListener("input", e => {
+			data[el.dataset.model] = parseFloat(el.value);
+			g.shapeMode++;
 		});
 	}
 
@@ -155,6 +169,9 @@ const opt = (() => {
 					? Math.floor(data.accuracy)
 					: "∞";
 			else updateShow(el, model);
+		}
+		for (const el of selects) {
+			el.value = data[el.dataset.model];
 		}
 		const $min = select("[data-model=minSpeed]");
 		if ($min) $min.max = data.maxSpeed;

@@ -24,6 +24,38 @@ function constrain(x, a, b) {
 	return x;
 }
 
+// vision-area geometry, shared by the neighbor test (Boid.neighbors) and the
+// drawn area (Boid.getShape); local frame: +x = heading, area centered at
+// (visionCenterX(), 0)
+
+function visionCenterX() {
+	return opt.visionOffset * opt.vision;
+}
+
+// (rx, ry) must already be rotated into the boid's local frame
+function visionContains(rx, ry) {
+	const v = opt.vision;
+	const cx = visionCenterX();
+
+	switch (opt.visionShape) {
+		case 1: // rectangle
+			return Math.abs(rx - cx) < v && Math.abs(ry) < v;
+		case 2: // triangle pointing forward
+			return rx >= cx - v && Math.abs(ry) <= (cx + v - rx) / 2;
+		case 3: // triangle pointing backward
+			return rx <= cx + v && Math.abs(ry) <= (rx - (cx - v)) / 2;
+		default: {
+			const dx = rx - cx;
+			return dx * dx + ry * ry < g.sqVis;
+		}
+	}
+}
+
+// bounding radius measured from the area's center
+function visionBound() {
+	return opt.visionShape === 0 ? opt.vision : opt.vision * Math.SQRT2;
+}
+
 function hsv(h, s, v) {
 	let r, g, b, i, f, p, q, t;
 

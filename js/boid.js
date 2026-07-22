@@ -8,6 +8,7 @@ class Boid extends V2D {
 		this.index = index;
 
 		this.shape = new PIXI.Graphics();
+		this.area = new PIXI.Graphics();
 		this.shapeMode = null;
 
 		this.desired = new PIXI.Graphics();
@@ -19,6 +20,7 @@ class Boid extends V2D {
 		this.desired.endFill();
 		this.desired.alpha = 0;
 
+		app.stage.addChild(this.area);
 		app.stage.addChild(this.shape);
 		app.stage.addChild(this.desired);
 	}
@@ -27,6 +29,14 @@ class Boid extends V2D {
 		const cands = flock.candidates(this);
 		const ns = [];
 		const ds = [];
+
+		const simple = opt.visionShape === 0 && opt.visionOffset === 0;
+		let cos, sin;
+		if (!simple) {
+			const a = this.vel.angle();
+			cos = Math.cos(a);
+			sin = Math.sin(a);
+		}
 
 		const candidate_count = cands
 			.map(c => c.length)
@@ -39,10 +49,22 @@ class Boid extends V2D {
 			for (; i < c.length; i += step) {
 				if (this === c[i]) continue;
 
-				const d = this.sqrDist(c[i]);
-				if (d < g.sqVis) {
-					ns.push(c[i]);
-					ds.push(d);
+				if (simple) {
+					const d = this.sqrDist(c[i]);
+					if (d < g.sqVis) {
+						ns.push(c[i]);
+						ds.push(d);
+					}
+				} else {
+					const wx = c[i].x - this.x;
+					const wy = c[i].y - this.y;
+					// rotate into the boid's local frame (+x = heading)
+					const rx = wx * cos + wy * sin;
+					const ry = wy * cos - wx * sin;
+					if (visionContains(rx, ry)) {
+						ns.push(c[i]);
+						ds.push(wx * wx + wy * wy);
+					}
 				}
 			}
 			i -= c.length;
@@ -169,6 +191,12 @@ class Boid extends V2D {
 		this.shape.y = this.y;
 		this.shape.rotation = this.vel.angle();
 
+		// the area gets the boid's position and heading but never its
+		// squash-and-stretch scale, so it always shows the true vision shape
+		this.area.x = this.x;
+		this.area.y = this.y;
+		this.area.rotation = this.shape.rotation;
+
 		if (opt.stretch) {
 			const t = constrain(this.vel.mag() / opt.maxSpeed, 0, 1);
 			const w = 1.4 - 0.9 * t;
@@ -210,18 +238,60 @@ class Boid extends V2D {
 				this.shape.endFill();
 			}
 
+			this.area.clear();
 			if (opt.areas || opt.outlines) {
-				this.shape.beginFill(0xffffff, opt.areas ? 0.03 : 0);
-				this.shape.lineStyle(opt.outlines ? 0.5 : 0, 0xffffff, 0.2);
-				this.shape.drawCircle(
-					0,
-					0,
-					opt.halfAreas ? opt.vision / 2 : opt.vision
-				);
-				this.shape.endFill();
+				const k = opt.halfAreas ? 0.5 : 1;
+				const v = opt.vision * k;
+				const cx = visionCenterX() * k;
+
+				this.area.beginFill(0xffffff, opt.areas ? 0.03 : 0);
+				this.area.lineStyle(opt.outlines ? 0.5 : 0, 0xffffff, 0.2);
+				switch (opt.visionShape) {
+					case 1:
+						this.area.drawRect(cx - v, -v, 2 * v, 2 * v);
+						break;
+					case 2:
+						this.area.drawPolygon([cx + v, 0, cx - v, -v, cx - v, v]);
+						break;
+					case 3:
+						this.area.drawPolygon([cx - v, 0, cx + v, -v, cx + v, v]);
+						break;
+					case 4: {
+						const lo =
+							((opt.visionArcDir - opt.visionArc / 2) * Math.PI) /
+							180;
+						const hi =
+							((opt.visionArcDir + opt.visionArc / 2) * Math.PI) /
+							180;
+
+						const sector = (a, b) => {
+							this.area.moveTo(cx, 0);
+							this.area.arc(cx, 0, v, a, b);
+							this.area.closePath();
+						};
+
+						// merge overlapping arcs into one path so the fill
+						// doesn't double up or punch even-odd holes
+						if (lo <= 0 && hi >= Math.PI) {
+							this.area.drawCircle(cx, 0, v);
+						} else if (lo <= 0) {
+							sector(-hi, hi);
+						} else if (hi >= Math.PI) {
+							sector(lo, 2 * Math.PI - lo);
+						} else {
+							sector(lo, hi);
+							sector(-hi, -lo);
+						}
+						break;
+					}
+					default:
+						this.area.drawCircle(cx, 0, v);
+				}
+				this.area.endFill();
 			}
 
 			this.shape.alpha = 0.8;
+			this.area.alpha = 0.8;
 
 			this.shapeMode = g.shapeMode;
 		}
@@ -231,6 +301,7 @@ class Boid extends V2D {
 
 	destroy() {
 		this.shape.destroy();
+		this.area.destroy();
 		this.desired.destroy();
 	}
 }

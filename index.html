@@ -199,6 +199,86 @@
 				data-model="vision"
 			/>
 
+			<p>
+				vision shape
+				<span class="tooltip">
+					?
+					<span class="tip">
+						the shape of the area each boid can see other boids in;
+						triangles point along the boid's heading.
+					</span>
+				</span>
+			</p>
+			<select data-model="visionShape">
+				<option value="0">circle</option>
+				<option value="1">rectangle</option>
+				<option value="2">triangle (points forward)</option>
+				<option value="3">triangle (points backward)</option>
+				<option value="4">arcs (field of view)</option>
+			</select>
+
+			<p>
+				vision offset
+				<span class="tooltip">
+					?
+					<span class="tip">
+						shifts the vision area along the boid's heading: positive
+						values move it in front of the boid, negative values
+						behind it.
+					</span>
+				</span>
+				<span data-show="visionOffset"></span>
+			</p>
+			<input
+				type="range"
+				min="-1"
+				max="1"
+				step="0.05"
+				data-model="visionOffset"
+				data-digits="2"
+			/>
+
+			<p>
+				arc width
+				<span class="tooltip">
+					?
+					<span class="tip">
+						only for the arcs vision shape: how many degrees each
+						eye's arc covers, from a narrow slit to a half circle
+						per eye.
+					</span>
+				</span>
+				<span data-show="visionArc"></span>
+			</p>
+			<input
+				type="range"
+				min="10"
+				max="180"
+				step="5"
+				data-model="visionArc"
+			/>
+
+			<p>
+				arc direction
+				<span class="tooltip">
+					?
+					<span class="tip">
+						only for the arcs vision shape: the angle each eye
+						points away from the heading. 0&deg; merges both arcs
+						into a forward cone, 90&deg; looks sideways like a bird
+						or fish, 180&deg; looks backward.
+					</span>
+				</span>
+				<span data-show="visionArcDir"></span>
+			</p>
+			<input
+				type="range"
+				min="0"
+				max="180"
+				step="5"
+				data-model="visionArcDir"
+			/>
+
 			<p>alignment force <span data-show="alignment"></span></p>
 			<input
 				type="range"

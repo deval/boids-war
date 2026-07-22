@@ -433,6 +433,31 @@ input[type="checkbox"]:checked + label + .nexter {
 	display: block;
 }
 
+/* select css */
+
+select {
+	font-family: var(--title-font);
+	display: block;
+	width: 100%;
+	padding: 4px 8px;
+	border-radius: 8px;
+	border: 2px solid var(--base);
+
+	background-color: #0008;
+	color: var(--base);
+
+	cursor: pointer;
+	transition: filter 0.2s;
+}
+
+select:hover {
+	filter: drop-shadow(0 0 5px #fff4);
+}
+
+select option {
+	background-color: #161616;
+}
+
 /* button css */
 
 button {

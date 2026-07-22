@@ -105,22 +105,31 @@ class Flock {
 		if (this.buckets[r]?.[c]) a.push(this.buckets[r][c]);
 	}
 
-	// Returns a list of lists of boids, where each sublist contains the boids in a nearby cell
+	// Returns a list of lists of boids, where each sublist contains the boids
+	// in a cell near the boid's vision area
 	candidates(boid) {
 		const cand = [];
+		const s = this.space.scale;
 
-		const row = Math.floor(boid.y / this.space.scale);
-		const col = Math.floor(boid.x / this.space.scale);
+		// search around the vision area's world center, which may be offset
+		// from the boid, with enough reach to cover the shape's corners
+		let x = boid.x;
+		let y = boid.y;
+		let reach = 1;
+		if (opt.visionShape !== 0 || opt.visionOffset !== 0) {
+			const a = boid.vel.angle();
+			const cx = visionCenterX();
+			x += cx * Math.cos(a);
+			y += cx * Math.sin(a);
+			reach = Math.ceil(visionBound() / s);
+		}
 
-		this._b(row, col, cand);
-		this._b(row, col + 1, cand);
-		this._b(row, col - 1, cand);
-		this._b(row + 1, col, cand);
-		this._b(row + 1, col + 1, cand);
-		this._b(row + 1, col - 1, cand);
-		this._b(row - 1, col, cand);
-		this._b(row - 1, col + 1, cand);
-		this._b(row - 1, col - 1, cand);
+		const row = Math.floor(y / s);
+		const col = Math.floor(x / s);
+
+		for (let r = row - reach; r <= row + reach; r++)
+			for (let c = col - reach; c <= col + reach; c++)
+				this._b(r, c, cand);
 
 		return cand;
 	}

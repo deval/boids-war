@@ -59,6 +59,7 @@ const opt = (() => {
 		staminaDrain: 0.25,
 		staminaFill: 0.5,
 		eatCooldown: 1.5,
+		eatImpact: 16,
 		decay: 25
 	};
 

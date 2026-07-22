@@ -55,7 +55,7 @@ class Flock {
 
 						o.vel.set(o.x - b.x, o.y - b.y);
 						if (o.vel.sqrMag() === 0) o.vel.random(1);
-						o.vel.setMag(3 * b.sp.maxSpeed + 4);
+						o.vel.setMag(b.sp.eatImpact);
 
 						b.eatTimer = b.sp.eatCooldown * 60;
 						break outer;

@@ -48,6 +48,7 @@ class Boid extends V2D {
 
 		const follow = sp.follow;
 		const avoid = sp.avoid;
+		const hunt = sp.hunt;
 
 		const simple = sp.visionShape === 0 && sp.visionOffset === 0;
 		const sqVis = sp.vision * sp.vision;
@@ -68,7 +69,14 @@ class Boid extends V2D {
 		for (const c of cands) {
 			for (; i < c.length; i += step) {
 				if (this === c[i]) continue;
-				if (!follow[c[i].si] && !avoid[c[i].si]) continue;
+				// hunted species only become visible as corpses; chasing live
+				// prey is still the follow relation's job
+				if (
+					!follow[c[i].si] &&
+					!avoid[c[i].si] &&
+					!(hunt[c[i].si] && c[i].dead)
+				)
+					continue;
 
 				if (simple) {
 					const d = this.sqrDist(c[i]);
@@ -100,6 +108,7 @@ class Boid extends V2D {
 		const sp = this.sp;
 		const follow = sp.follow;
 		const avoid = sp.avoid;
+		const hunt = sp.hunt;
 
 		const aln = new V2D();
 		const csn = new V2D();
@@ -111,8 +120,22 @@ class Boid extends V2D {
 		let nf = 0;
 		let na = 0;
 		let i = 0;
+		let corpse = null;
+		let corpseD = Infinity;
 		for (const other of ns) {
 			const d = 1 / (ds[i] || 0.00001);
+
+			// remember the nearest edible corpse; if one is in sight it takes
+			// priority over flocking below
+			if (
+				hunt[other.si] &&
+				other.dead &&
+				other.health > 0 &&
+				ds[i] < corpseD
+			) {
+				corpse = other;
+				corpseD = ds[i];
+			}
 
 			if (follow[other.si]) {
 				// corpses are still gathered around (cohesion/separation) but
@@ -159,6 +182,21 @@ class Boid extends V2D {
 		}
 
 		if (na > 0) flee.setMag(sp.maxSpeed).sub(this.vel).max(sp.maxForce);
+
+		// eating beats flocking: seek the corpse instead of following the
+		// flock, keeping only the flee force so avoided species still repel.
+		// The steer gets double the normal force cap so hunters turn onto a
+		// corpse decisively even from a nearly opposite heading
+		if (corpse) {
+			const seek = V2D.sub(corpse, this)
+				.setMag(sp.maxSpeed)
+				.sub(this.vel)
+				.max(2 * sp.maxForce);
+
+			this.acc.sclAdd(seek, 2);
+			this.acc.sclAdd(flee, sp.avoidForce);
+			return;
+		}
 
 		this.acc.sclAdd(aln, sp.alignment);
 		this.acc.sclAdd(csn, sp.cohesion);

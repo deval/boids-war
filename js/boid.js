@@ -7,6 +7,9 @@ class Boid extends V2D {
 		this.vel = V2D.random(random(this.sp.minSpeed, this.sp.maxSpeed));
 		this.acc = new V2D();
 
+		this.stamina = this.sp.maxStamina;
+		this.exhausted = false;
+
 		this.shape = new PIXI.Graphics();
 		this.border = new PIXI.Graphics();
 		this.area = new PIXI.Graphics();
@@ -221,6 +224,23 @@ class Boid extends V2D {
 		}
 
 		this.vel.max(sp.maxSpeed);
+
+		// after the min clamp, so exhaustion wins even when minSpeed > 25%
+		if (this.exhausted) this.vel.max(0.25 * sp.maxSpeed);
+
+		if (sp.staminaDrain) {
+			const ratio = sp.maxSpeed ? this.vel.mag() / sp.maxSpeed : 0;
+			if (ratio > 0.5)
+				this.stamina -=
+					sp.staminaDrain * ((ratio - 0.5) / 0.5) * g.delta;
+			else this.stamina += sp.staminaFill * g.delta;
+			this.stamina = constrain(this.stamina, 0, sp.maxStamina);
+			if (this.stamina <= 0 && !this.exhausted) {
+				this.exhausted = true;
+				this.vel.max(0.25 * sp.maxSpeed);
+			} else if (this.stamina >= sp.maxStamina) this.exhausted = false;
+		} else this.exhausted = false;
+
 		this.sclAdd(this.vel, g.delta);
 
 		if (opt.bounce) {

@@ -44,6 +44,17 @@ function visionContains(rx, ry) {
 			return rx >= cx - v && Math.abs(ry) <= (cx + v - rx) / 2;
 		case 3: // triangle pointing backward
 			return rx <= cx + v && Math.abs(ry) <= (rx - (cx - v)) / 2;
+		case 4: {
+			// two field-of-view arcs mirrored across the heading axis
+			const dx = rx - cx;
+			if (dx * dx + ry * ry >= g.sqVis) return false;
+			// folding with |ry| tests both eyes at once; phi and the arc
+			// center both live in [0, pi], so no angle wraparound is needed
+			const phi = Math.atan2(Math.abs(ry), dx);
+			const dir = (opt.visionArcDir * Math.PI) / 180;
+			const half = (opt.visionArc * Math.PI) / 360;
+			return Math.abs(phi - dir) <= half;
+		}
 		default: {
 			const dx = rx - cx;
 			return dx * dx + ry * ry < g.sqVis;
@@ -53,7 +64,9 @@ function visionContains(rx, ry) {
 
 // bounding radius measured from the area's center
 function visionBound() {
-	return opt.visionShape === 0 ? opt.vision : opt.vision * Math.SQRT2;
+	return opt.visionShape === 0 || opt.visionShape === 4
+		? opt.vision
+		: opt.vision * Math.SQRT2;
 }
 
 function hsv(h, s, v) {

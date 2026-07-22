@@ -32,6 +32,8 @@ const opt = (() => {
 		vision: 25,
 		visionShape: 0,
 		visionOffset: 0,
+		visionArc: 120,
+		visionArcDir: 0,
 		alignment: 1.1,
 		bias: 1.5,
 		cohesion: 1,
@@ -67,6 +69,8 @@ const opt = (() => {
 		// a-z is exhausted; new settings use uppercase codes
 		visionShape: "A",
 		visionOffset: "B",
+		visionArc: "C",
+		visionArcDir: "D",
 		alignment: "m",
 		bias: "n",
 		cohesion: "o",
@@ -133,8 +137,7 @@ const opt = (() => {
 					? Math.floor(data.accuracy)
 					: "∞";
 				return;
-			} else if (model === "vision" || model === "visionOffset")
-				g.shapeMode++;
+			} else if (model.startsWith("vision")) g.shapeMode++;
 
 			updateShow(el, model);
 		});

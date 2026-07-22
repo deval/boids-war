@@ -256,6 +256,34 @@ class Boid extends V2D {
 					case 3:
 						this.area.drawPolygon([cx - v, 0, cx + v, -v, cx + v, v]);
 						break;
+					case 4: {
+						const lo =
+							((opt.visionArcDir - opt.visionArc / 2) * Math.PI) /
+							180;
+						const hi =
+							((opt.visionArcDir + opt.visionArc / 2) * Math.PI) /
+							180;
+
+						const sector = (a, b) => {
+							this.area.moveTo(cx, 0);
+							this.area.arc(cx, 0, v, a, b);
+							this.area.closePath();
+						};
+
+						// merge overlapping arcs into one path so the fill
+						// doesn't double up or punch even-odd holes
+						if (lo <= 0 && hi >= Math.PI) {
+							this.area.drawCircle(cx, 0, v);
+						} else if (lo <= 0) {
+							sector(-hi, hi);
+						} else if (hi >= Math.PI) {
+							sector(lo, 2 * Math.PI - lo);
+						} else {
+							sector(lo, hi);
+							sector(-hi, -lo);
+						}
+						break;
+					}
 					default:
 						this.area.drawCircle(cx, 0, v);
 				}

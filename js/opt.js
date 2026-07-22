@@ -54,7 +54,10 @@ const opt = (() => {
 		minSpeed: 1,
 		maxSpeed: 4,
 		drag: 0.005,
-		noise: 1
+		noise: 1,
+		maxStamina: 100,
+		staminaDrain: 0.25,
+		staminaFill: 0.5
 	};
 
 	const perSpecies = new Set(Object.keys(speciesDefaults));

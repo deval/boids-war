@@ -38,7 +38,7 @@ const opt = (() => {
 	// per-species settings; species 0 starts from these, later species copy
 	// the last species. follow/avoid are boolean lists indexed by species.
 	const speciesDefaults = {
-		count: 1500,
+		count: 500,
 		color: 0x2f86c9,
 		avoidForce: 1.5,
 		vision: 25,

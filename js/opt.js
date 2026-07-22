@@ -87,6 +87,62 @@ const opt = (() => {
 
 	const data = Object.assign({}, defaults);
 
+	const storageKey = "boidsOpt";
+
+	function serialize() {
+		const array = [];
+
+		const entries = Object.entries(data);
+		for (const [key, value] of entries) {
+			const k = encode[key];
+
+			if (!k) continue;
+
+			if (typeof value === "boolean")
+				array.push(`${k}=${value ? "1" : "0"}`);
+			else array.push(`${k}=${value}`);
+		}
+
+		return array.join("|");
+	}
+
+	function deserialize(str) {
+		const args = new Map();
+		for (const arg of str.split("|")) {
+			const [key, val] = arg.split("=");
+			args.set(key, val);
+		}
+
+		for (const [key, value] of Object.entries(data)) {
+			const param = args.get(encode[key]);
+			if (!param) continue;
+
+			if (typeof value === "boolean") {
+				data[key] = param !== "0";
+			} else {
+				data[key] = parseFloat(param);
+			}
+		}
+
+		data.accuracy = data.accuracyPower >= 10 ? 0 : 2 ** data.accuracyPower;
+	}
+
+	function save() {
+		// localStorage can throw (private mode, blocked storage); persistence
+		// is optional, so keep the app running without it
+		try {
+			localStorage.setItem(storageKey, serialize());
+		} catch {}
+	}
+
+	try {
+		const saved = localStorage.getItem(storageKey);
+		if (saved) deserialize(saved);
+	} catch {}
+	// never restore transient state: always load unpaused with the menu shown
+	data.menu = defaults.menu;
+	data.paused = defaults.paused;
+
 	// detecting data changes
 
 	const checks = document.body.querySelectorAll(
@@ -112,6 +168,8 @@ const opt = (() => {
 			) {
 				g.shapeMode++;
 			}
+
+			save();
 		});
 	}
 
@@ -136,10 +194,12 @@ const opt = (() => {
 				select(`[data-show=accuracy]`).textContent = data.accuracy
 					? Math.floor(data.accuracy)
 					: "∞";
+				save();
 				return;
 			} else if (model.startsWith("vision")) g.shapeMode++;
 
 			updateShow(el, model);
+			save();
 		});
 	}
 
@@ -147,6 +207,7 @@ const opt = (() => {
 		el.addEventListener("input", e => {
 			data[el.dataset.model] = parseFloat(el.value);
 			g.shapeMode++;
+			save();
 		});
 	}
 
@@ -203,6 +264,7 @@ const opt = (() => {
 		reset() {
 			Object.assign(data, defaults);
 			updateAll();
+			save();
 		},
 
 		next() {
@@ -210,20 +272,7 @@ const opt = (() => {
 		},
 
 		exportSave() {
-			const array = [];
-
-			const entries = Object.entries(data);
-			for (const [key, value] of entries) {
-				const k = encode[key];
-
-				if (!k) continue;
-
-				if (typeof value === "boolean")
-					array.push(`${k}=${value ? "1" : "0"}`);
-				else array.push(`${k}=${value}`);
-			}
-
-			select("#exporter").value = btoa(array.join("|"));
+			select("#exporter").value = btoa(serialize());
 			select("#export-popup").classList.add("visible");
 			select("#popupwindow").classList.add("visible");
 		},
@@ -244,33 +293,16 @@ const opt = (() => {
 			const str = select("#importer").value.trim();
 			if (!str) return;
 
-			let split;
+			let decoded;
 			try {
-				split = atob(str).split("|");
+				decoded = atob(str);
 			} catch {
 				return;
 			}
-			const args = new Map();
-			for (const arg of split) {
-				const [key, val] = arg.split("=");
-				args.set(key, val);
-			}
-
-			for (const [key, value] of Object.entries(data)) {
-				const param = args.get(encode[key]);
-				if (!param) continue;
-
-				if (typeof value === "boolean") {
-					data[key] = param !== "0";
-				} else {
-					data[key] = parseFloat(param);
-				}
-			}
-
-			data.accuracy =
-				data.accuracyPower >= 10 ? 0 : 2 ** data.accuracyPower;
+			deserialize(decoded);
 			methods.leaveMenu();
 			updateAll();
+			save();
 		},
 
 		copy() {

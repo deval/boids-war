@@ -96,13 +96,58 @@
 				<button data-click="importMenu">import settings</button>
 			</div>
 
-			<p>boids <span data-show="boids"></span></p>
+			<h4>species</h4>
+
+			<div id="species-tabs"></div>
+
+			<div class="resetters">
+				<button data-click="addSpecies">add species</button>
+				<button data-click="removeSpecies" id="removeSpecies">
+					remove species
+				</button>
+			</div>
+
+			<p>
+				border color
+				<span class="tooltip">
+					?
+					<span class="tip">
+						the outline color of this species' boids, so species can
+						be told apart.
+					</span>
+				</span>
+				<input type="color" id="speciesColor" />
+			</p>
+
+			<p>boids <span data-show="count"></span></p>
 			<input
 				type="range"
-				min="50"
-				max="5000"
-				step="50"
-				data-model="boids"
+				min="0"
+				max="500"
+				step="1"
+				data-model="count"
+			/>
+
+			<p>
+				relations
+				<span class="tooltip">
+					?
+					<span class="tip">
+						which species this species flocks together with (follow)
+						and which it flees from (avoid).
+					</span>
+				</span>
+			</p>
+			<div id="species-relations"></div>
+
+			<p>avoid force <span data-show="avoidForce"></span></p>
+			<input
+				type="range"
+				min="0"
+				max="4"
+				step="0.1"
+				data-model="avoidForce"
+				data-digits="1"
 			/>
 
 			<h4>visual settings</h4>
@@ -150,71 +195,7 @@
 				</label>
 			</div>
 
-			<h4>boid movement</h4>
-
-			<div>
-				<input type="checkbox" id="particle" data-model="particle" />
-				<label for="particle"> particle mode</label>
-				<span class="tooltip">
-					?
-					<span class="tip">
-						turn off all flocking forces, making boids move like
-						particles affected only by noise, drag, and human input.
-					</span>
-				</span>
-			</div>
-
-			<div>
-				<input type="checkbox" id="bounce" data-model="bounce" />
-				<label for="bounce"> bounce off of edges</label>
-			</div>
-
-			<div>
-				<input
-					type="checkbox"
-					id="avoidEdges"
-					data-model="avoidEdges"
-				/>
-				<label for="avoidEdges"> steer away from edges</label>
-				<span class="tooltip">
-					?
-					<span class="tip">
-						boids near an edge turn back toward the middle instead of
-						hitting it; the margin sets how far from the edge they
-						start turning.
-					</span>
-				</span>
-			</div>
-
-			<p>edge margin <span data-show="edgeMargin"></span></p>
-			<input
-				type="range"
-				min="10"
-				max="200"
-				step="5"
-				data-model="edgeMargin"
-			/>
-
-			<p>
-				movement accuracy
-				<span class="tooltip">
-					?
-					<span class="tip">
-						the maximum number of boids in vision that each boid
-						interacts with; higher values can cause lag with more
-						boids.
-					</span>
-				</span>
-				<span data-show="accuracy"></span>
-			</p>
-			<input
-				type="range"
-				min="2.25"
-				max="10"
-				step="0.25"
-				data-model="accuracyPower"
-				data-digits="2"
-			/>
+			<h4>species movement</h4>
 
 			<p>boid vision <span data-show="vision"></span></p>
 			<input
@@ -405,6 +386,72 @@
 				step="0.5"
 				data-model="noise"
 				data-digits="1"
+			/>
+
+			<h4>world</h4>
+
+			<div>
+				<input type="checkbox" id="particle" data-model="particle" />
+				<label for="particle"> particle mode</label>
+				<span class="tooltip">
+					?
+					<span class="tip">
+						turn off all flocking forces, making boids move like
+						particles affected only by noise, drag, and human input.
+					</span>
+				</span>
+			</div>
+
+			<div>
+				<input type="checkbox" id="bounce" data-model="bounce" />
+				<label for="bounce"> bounce off of edges</label>
+			</div>
+
+			<div>
+				<input
+					type="checkbox"
+					id="avoidEdges"
+					data-model="avoidEdges"
+				/>
+				<label for="avoidEdges"> steer away from edges</label>
+				<span class="tooltip">
+					?
+					<span class="tip">
+						boids near an edge turn back toward the middle instead of
+						hitting it; the margin sets how far from the edge they
+						start turning.
+					</span>
+				</span>
+			</div>
+
+			<p>edge margin <span data-show="edgeMargin"></span></p>
+			<input
+				type="range"
+				min="10"
+				max="200"
+				step="5"
+				data-model="edgeMargin"
+			/>
+
+			<p>
+				movement accuracy
+				<span class="tooltip">
+					?
+					<span class="tip">
+						the maximum number of boids in vision that each boid
+						interacts with; higher values can cause lag with more
+						boids.
+					</span>
+				</span>
+				<span data-show="accuracy"></span>
+			</p>
+			<input
+				type="range"
+				min="2.25"
+				max="10"
+				step="0.25"
+				data-model="accuracyPower"
+				data-digits="2"
 			/>
 
 			<h4>debug info</h4>

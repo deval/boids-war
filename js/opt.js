@@ -14,7 +14,6 @@ const opt = (() => {
 	const defaults = {
 		menu: true,
 		paused: false,
-		boids: 1500,
 
 		toggle: false,
 		desired: false,
@@ -31,6 +30,17 @@ const opt = (() => {
 		edgeMargin: 50,
 		accuracyPower: 5,
 		accuracy: 32,
+
+		debug: false,
+		buckets: false
+	};
+
+	// per-species settings; species 0 starts from these, later species copy
+	// the last species. follow/avoid are boolean lists indexed by species.
+	const speciesDefaults = {
+		count: 500,
+		color: 0x2f86c9,
+		avoidForce: 1.5,
 		vision: 25,
 		visionShape: 0,
 		visionOffset: 0,
@@ -44,16 +54,27 @@ const opt = (() => {
 		minSpeed: 1,
 		maxSpeed: 4,
 		drag: 0.005,
-		noise: 1,
-
-		debug: false,
-		buckets: false
+		noise: 1
 	};
+
+	const perSpecies = new Set(Object.keys(speciesDefaults));
+
+	// border colors cycled through when adding species
+	const palette = [
+		0x2f86c9, 0xe0635c, 0x5ce07a, 0xe0c95c, 0xb35ce0, 0x5cd8e0, 0xe08b5c,
+		0xe05cb8
+	];
+
+	function defaultSpecies() {
+		return Object.assign({}, speciesDefaults, {
+			follow: [true],
+			avoid: [false]
+		});
+	}
 
 	const encode = {
 		menu: "a",
 		paused: "b",
-		boids: "c",
 
 		toggle: "d",
 		desired: "e",
@@ -69,8 +90,16 @@ const opt = (() => {
 		edgeMargin: "F",
 		particle: "j",
 		accuracyPower: "k",
+
+		debug: "v",
+		buckets: "w"
+	};
+
+	// codes that per-species settings used before species existed; save
+	// strings without an S entry are migrated into a single species
+	const legacyEncode = {
+		count: "c", // was the global boid count
 		vision: "l",
-		// a-z is exhausted; new settings use uppercase codes
 		visionShape: "A",
 		visionOffset: "B",
 		visionArc: "C",
@@ -83,13 +112,12 @@ const opt = (() => {
 		minSpeed: "r",
 		maxSpeed: "s",
 		drag: "t",
-		noise: "u",
-
-		debug: "v",
-		buckets: "w"
+		noise: "u"
 	};
 
 	const data = Object.assign({}, defaults);
+	data.species = [defaultSpecies()];
+	data.sel = 0;
 
 	const storageKey = "boidsOpt";
 
@@ -107,7 +135,18 @@ const opt = (() => {
 			else array.push(`${k}=${value}`);
 		}
 
+		// species are structured, so they get one url-encoded json entry;
+		// encodeURIComponent escapes both "|" and "=", keeping the format safe
+		array.push(`S=${encodeURIComponent(JSON.stringify(data.species))}`);
+
 		return array.join("|");
+	}
+
+	function normalizeSpecies(s, i, arr) {
+		const out = Object.assign(defaultSpecies(), s);
+		out.follow = arr.map((_, j) => !!(s.follow?.[j] ?? j === i));
+		out.avoid = arr.map((_, j) => !!s.avoid?.[j]);
+		return out;
 	}
 
 	function deserialize(str) {
@@ -129,6 +168,25 @@ const opt = (() => {
 		}
 
 		data.accuracy = data.accuracyPower >= 10 ? 0 : 2 ** data.accuracyPower;
+
+		const sp = args.get("S");
+		if (sp) {
+			try {
+				const arr = JSON.parse(decodeURIComponent(sp));
+				if (Array.isArray(arr) && arr.length)
+					data.species = arr.map(normalizeSpecies);
+			} catch {}
+		} else {
+			// pre-species save string: build a single species from the old
+			// flat single-letter codes
+			const species = defaultSpecies();
+			for (const [key, code] of Object.entries(legacyEncode)) {
+				const param = args.get(code);
+				if (param !== undefined) species[key] = parseFloat(param);
+			}
+			data.species = [species];
+		}
+		data.sel = 0;
 	}
 
 	function save() {
@@ -147,6 +205,21 @@ const opt = (() => {
 	data.menu = defaults.menu;
 	data.paused = defaults.paused;
 
+	// per-species settings are read and written through the selected species
+
+	function getVal(model) {
+		return perSpecies.has(model) ? data.species[data.sel][model] : data[model];
+	}
+
+	function setVal(model, value) {
+		if (perSpecies.has(model)) data.species[data.sel][model] = value;
+		else data[model] = value;
+	}
+
+	function hexColor(color) {
+		return `#${color.toString(16).padStart(6, "0")}`;
+	}
+
 	// detecting data changes
 
 	const checks = document.body.querySelectorAll(
@@ -160,7 +233,7 @@ const opt = (() => {
 	for (const el of checks) {
 		el.addEventListener("input", e => {
 			const model = el.dataset.model;
-			data[model] = el.checked;
+			setVal(model, el.checked);
 
 			if (model === "toggle")
 				select("#toggler img").classList.toggle("gone", el.checked);
@@ -180,15 +253,15 @@ const opt = (() => {
 	for (const el of sliders) {
 		const model = el.dataset.model;
 		el.addEventListener("input", e => {
-			data[model] = parseFloat(el.value);
+			setVal(model, parseFloat(el.value));
 
 			if (model === "maxSpeed") {
 				const $min = select("[data-model=minSpeed]");
-				$min.max = data.maxSpeed;
+				$min.max = getVal("maxSpeed");
 
-				if (data.maxSpeed <= data.minSpeed) {
-					$min.value = data.maxSpeed;
-					data.minSpeed = data.maxSpeed;
+				if (getVal("maxSpeed") <= getVal("minSpeed")) {
+					$min.value = getVal("maxSpeed");
+					setVal("minSpeed", getVal("maxSpeed"));
 					updateShow($min, "minSpeed");
 				}
 			} else if (model === "accuracyPower") {
@@ -209,29 +282,36 @@ const opt = (() => {
 
 	for (const el of selects) {
 		el.addEventListener("input", e => {
-			data[el.dataset.model] = parseFloat(el.value);
+			setVal(el.dataset.model, parseFloat(el.value));
 			g.shapeMode++;
 			save();
 		});
 	}
 
+	select("#speciesColor").addEventListener("input", e => {
+		data.species[data.sel].color = parseInt(e.target.value.slice(1), 16);
+		renderSpecies();
+		if (typeof g !== "undefined") g.shapeMode++;
+		save();
+	});
+
 	function updateShow(el, model) {
 		const digits = el.dataset.digits ? parseInt(el.dataset.digits) : 0;
-		console.log(digits);
 		select(`[data-show=${model}]`).textContent =
-			data[model].toFixed(digits);
+			getVal(model).toFixed(digits);
 	}
 
 	function updateAll() {
+		renderSpecies();
 		for (const el of checks) {
 			const model = el.dataset.model;
-			el.checked = data[model];
+			el.checked = getVal(model);
 			if (model === "toggle")
 				select("#toggler img").classList.toggle("gone", el.checked);
 		}
 		for (const el of sliders) {
 			const model = el.dataset.model;
-			el.value = data[model];
+			el.value = getVal(model);
 			if (model === "accuracyPower")
 				select(`[data-show=accuracy]`).textContent = data.accuracy
 					? Math.floor(data.accuracy)
@@ -239,13 +319,74 @@ const opt = (() => {
 			else updateShow(el, model);
 		}
 		for (const el of selects) {
-			el.value = data[el.dataset.model];
+			el.value = getVal(el.dataset.model);
 		}
 		const $min = select("[data-model=minSpeed]");
-		if ($min) $min.max = data.maxSpeed;
+		if ($min) $min.max = getVal("maxSpeed");
 		if (typeof g !== "undefined") g.shapeMode++;
 	}
-	updateAll();
+
+	// species tabs and the follow/avoid list are rebuilt whenever species
+	// are added, removed, selected, or recolored
+
+	function renderSpecies() {
+		const active = data.species[data.sel];
+
+		const tabs = select("#species-tabs");
+		tabs.replaceChildren();
+		data.species.forEach((s, i) => {
+			const tab = document.createElement("button");
+			tab.type = "button";
+			tab.className = "species-tab";
+			tab.classList.toggle("active", i === data.sel);
+			tab.style.setProperty("--species", hexColor(s.color));
+			tab.textContent = i + 1;
+			tab.addEventListener("click", () => {
+				data.sel = i;
+				updateAll();
+			});
+			tabs.append(tab);
+		});
+
+		select("#removeSpecies").disabled = data.species.length <= 1;
+		select("#speciesColor").value = hexColor(active.color);
+
+		const rels = select("#species-relations");
+		rels.replaceChildren();
+		data.species.forEach((s, i) => {
+			const row = document.createElement("div");
+			row.className = "relation";
+
+			const swatch = document.createElement("span");
+			swatch.className = "swatch";
+			swatch.style.backgroundColor = hexColor(s.color);
+
+			const name = document.createElement("span");
+			name.className = "relation-name";
+			name.textContent = `species ${i + 1}`;
+
+			row.append(swatch, name);
+
+			for (const kind of ["follow", "avoid"]) {
+				const box = document.createElement("input");
+				box.type = "checkbox";
+				box.id = `${kind}-${i}`;
+				box.checked = active[kind][i];
+				box.addEventListener("input", () => {
+					data.species[data.sel][kind][i] = box.checked;
+					save();
+				});
+
+				const label = document.createElement("label");
+				label.htmlFor = box.id;
+				label.textContent = ` ${kind}`;
+
+				row.append(box, label);
+			}
+
+			rels.append(row);
+		});
+	}
 
 	// methods to call from html
 
@@ -267,6 +408,46 @@ const opt = (() => {
 
 		reset() {
 			Object.assign(data, defaults);
+			data.species = [defaultSpecies()];
+			data.sel = 0;
+			updateAll();
+			save();
+		},
+
+		addSpecies() {
+			const n = data.species.length;
+			const copy = JSON.parse(JSON.stringify(data.species[n - 1]));
+
+			// everyone's relation lists gain a slot for the newcomer, which
+			// inherits the last species' relations and follows itself
+			for (const s of data.species) {
+				s.follow.push(false);
+				s.avoid.push(false);
+			}
+			copy.follow.push(true);
+			copy.avoid.push(false);
+			copy.color = palette[n % palette.length];
+
+			data.species.push(copy);
+			data.sel = n;
+			updateAll();
+			save();
+		},
+
+		removeSpecies() {
+			if (data.species.length <= 1) return;
+
+			const i = data.sel;
+			data.species.splice(i, 1);
+			for (const s of data.species) {
+				s.follow.splice(i, 1);
+				s.avoid.splice(i, 1);
+			}
+			if (data.sel >= data.species.length)
+				data.sel = data.species.length - 1;
+
+			// species indices shifted, so existing boids must be rebuilt
+			if (typeof flock !== "undefined") flock.reset();
 			updateAll();
 			save();
 		},
@@ -304,6 +485,7 @@ const opt = (() => {
 				return;
 			}
 			deserialize(decoded);
+			if (typeof flock !== "undefined") flock.reset();
 			methods.leaveMenu();
 			updateAll();
 			save();
@@ -316,6 +498,8 @@ const opt = (() => {
 
 		toggleMenu
 	};
+
+	updateAll();
 
 	document.body
 		.querySelectorAll("[data-click]")

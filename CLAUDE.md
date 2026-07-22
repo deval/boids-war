@@ -64,9 +64,12 @@ shows up as `pageerror` events or other console errors.
 
 Everything is a global; use `page.evaluate`:
 
-- `opt` — live settings object (e.g. `opt.stretch`, `opt.maxSpeed`)
+- `opt` — live settings object (e.g. `opt.stretch`); movement/vision params
+  are per-species: `opt.species` (array), `opt.sel` (selected species index)
 - `flock.boids` — array of boids; each has `.vel` (V2D, `.mag()`), `.shape`
-  (PIXI.Graphics with `.scale`, `.tint`, `.rotation`), `.x`/`.y`
+  (PIXI.Graphics with `.scale`, `.tint`, `.rotation`), `.x`/`.y`, `.si`
+  (species index), `.sp` (live species settings), `.border` (species-colored
+  outline Graphics)
 - `g` — globals, including `g.shapeMode` (shape-rebuild counter)
 
 Give the sim ~1–2s after load/toggles before asserting.
@@ -78,9 +81,21 @@ Give the sim ~1–2s after load/toggles before asserting.
   cached geometry must increment `g.shapeMode` in its listener in `js/opt.js`
   (see the `hideBoids`/`areas`/`outlines`/`halfAreas` condition). Per-frame
   visual effects (tint, `scale`) go in `show()` instead and need no bump.
-- **New settings need two entries in `js/opt.js`:** a default in `defaults`
-  and a unique single-letter code in `encode` (a–z; all of a–z are now taken —
-  next settings need a new scheme, e.g. uppercase). A setting without an
+- **Species.** Movement/vision settings live per-species in `opt.species`
+  (see `speciesDefaults` in `js/opt.js`); the menu's sliders edit the species
+  selected by `opt.sel`. Each species has a `count`, border `color`,
+  `avoidForce`, and `follow`/`avoid` boolean lists indexed by species. The
+  flock reconciles boid counts per frame; species removal/import forces a
+  rebuild (stale `boid.si`). The tab row and follow/avoid list are rebuilt by
+  `renderSpecies()`.
+- **New global settings need two entries in `js/opt.js`:** a default in
+  `defaults` and a unique single-letter code in `encode` (a–z is exhausted —
+  use uppercase; `S` is reserved for the species blob). A setting without an
   `encode` entry is silently dropped from export/import save strings.
+- **New per-species settings** just need a default in `speciesDefaults` —
+  the whole species array is serialized as one url-encoded JSON entry
+  (`S=...`). Save strings without `S` are migrated via `legacyEncode` into a
+  single species.
 - New checkbox/slider markup in `index.html` just needs `data-model="<name>"`;
-  the generic listeners in `opt.js` pick it up automatically.
+  the generic listeners in `opt.js` pick it up automatically (routed to the
+  selected species when the name is in `speciesDefaults`).

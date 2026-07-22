@@ -2,8 +2,6 @@
 const g = {
 	mouseForce: 0,
 
-	sqVis: opt.vision * opt.vision,
-
 	mouse: {
 		x: 0,
 		y: 0,
@@ -36,9 +34,6 @@ const g = {
 	delta: 1,
 	shapeMode: 1,
 
-	bias: parseFloat(opt.rbias),
-	noiseRange: (Math.PI / 80) * opt.noise,
-
 	fpsA: [],
 	fps: 60
 };
@@ -56,19 +51,21 @@ const app = new PIXI.Application({
 
 document.body.prepend(app.view);
 
-let flock = new Flock(opt.boids);
+let flock = new Flock();
 
 function loop(delta) {
 	g.delta = Math.min(delta, 2);
 
-	g.mouseForce = max(
-		(opt.maxSpeed *
-			opt.maxForce *
-			(opt.alignment + opt.cohesion + opt.separation + 1)) /
-			16,
-		0
-	);
-	g.sqVis = opt.vision * opt.vision;
+	g.mouseForce = 0;
+	for (const sp of opt.species) {
+		g.mouseForce = max(
+			g.mouseForce,
+			(sp.maxSpeed *
+				sp.maxForce *
+				(sp.alignment + sp.cohesion + sp.separation + 1)) /
+				16
+		);
+	}
 
 	if (!opt.paused) {
 		flock.update();

@@ -698,11 +698,11 @@ input[type="color"]:hover {
 
 .relation .relation-name {
 	display: inline-block;
-	width: 6.5em;
+	width: 5.5em;
 }
 
 .relation label {
-	margin-right: 16px;
+	margin-right: 10px;
 }
 
 /* queries */

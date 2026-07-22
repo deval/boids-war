@@ -24,10 +24,79 @@ class Flock {
 		} else {
 			this.organize();
 			for (const boid of this.boids) {
+				if (boid.dead) continue;
 				if (boid.sp.vision > 0) boid.flock(flock);
 				boid.interact();
 			}
+			this.hunt();
 		}
+	}
+
+	// kills, bites, and corpse removal; runs on the buckets organize() just
+	// built, and splices at the end of the frame when nothing reads them
+	hunt() {
+		const anyHunt = opt.species.map(s => s.hunt.some(Boolean));
+
+		for (const b of this.boids) {
+			if (b.dead || b.eatTimer > 0 || !anyHunt[b.si]) continue;
+
+			const hunt = b.sp.hunt;
+
+			outer: for (const c of this.contactCells(b)) {
+				for (const o of c) {
+					if (o === b || !hunt[o.si]) continue;
+					if (b.sqrDist(o) > 100) continue;
+
+					if (o.dead) {
+						// a bite: consume, knock the corpse away, and start
+						// the eat cooldown
+						if (o.health <= 0) continue;
+						o.health -= o.sp.decay;
+
+						o.vel.set(o.x - b.x, o.y - b.y);
+						if (o.vel.sqrMag() === 0) o.vel.random(1);
+						o.vel.setMag(3 * b.sp.maxSpeed + 4);
+
+						b.eatTimer = b.sp.eatCooldown * 60;
+						break outer;
+					}
+
+					// a live target dies only when touched from behind: the
+					// hunter sits in the half-plane opposite the prey's heading
+					const dot =
+						(b.x - o.x) * o.vel.x + (b.y - o.y) * o.vel.y;
+					if (dot < 0) {
+						o.dead = true;
+						o.health = 100;
+						o.acc.zero();
+						break outer;
+					}
+				}
+			}
+		}
+
+		for (let i = this.boids.length - 1; i >= 0; i--) {
+			const b = this.boids[i];
+			if (b.dead && b.health <= 0) {
+				b.destroy();
+				this.boids.splice(i, 1);
+			}
+		}
+	}
+
+	// the 3x3 cells around the boid itself; candidates() recenters on the
+	// vision area, which is wrong for body contact. The bucket scale's 25px
+	// floor keeps this wider than the contact radius
+	contactCells(boid) {
+		const cells = [];
+		const s = this.space.scale;
+		const row = Math.floor(boid.y / s);
+		const col = Math.floor(boid.x / s);
+
+		for (let r = row - 1; r <= row + 1; r++)
+			for (let c = col - 1; c <= col + 1; c++) this._b(r, c, cells);
+
+		return cells;
 	}
 
 	draw() {

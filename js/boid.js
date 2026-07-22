@@ -1,13 +1,14 @@
 class Boid extends V2D {
-	constructor(index) {
+	constructor(si) {
 		super(random(g.width), random(g.height));
 
-		this.vel = V2D.random(random(opt.minSpeed, opt.maxSpeed));
+		this.si = si;
+
+		this.vel = V2D.random(random(this.sp.minSpeed, this.sp.maxSpeed));
 		this.acc = new V2D();
 
-		this.index = index;
-
 		this.shape = new PIXI.Graphics();
+		this.border = new PIXI.Graphics();
 		this.area = new PIXI.Graphics();
 		this.shapeMode = null;
 
@@ -22,15 +23,27 @@ class Boid extends V2D {
 
 		app.stage.addChild(this.area);
 		app.stage.addChild(this.shape);
+		app.stage.addChild(this.border);
 		app.stage.addChild(this.desired);
 	}
 
+	// looked up live so imports/resets that replace opt.species can't leave
+	// boids pointing at stale settings objects
+	get sp() {
+		return opt.species[this.si];
+	}
+
 	neighbors(flock) {
+		const sp = this.sp;
 		const cands = flock.candidates(this);
 		const ns = [];
 		const ds = [];
 
-		const simple = opt.visionShape === 0 && opt.visionOffset === 0;
+		const follow = sp.follow;
+		const avoid = sp.avoid;
+
+		const simple = sp.visionShape === 0 && sp.visionOffset === 0;
+		const sqVis = sp.vision * sp.vision;
 		let cos, sin;
 		if (!simple) {
 			const a = this.vel.angle();
@@ -48,10 +61,11 @@ class Boid extends V2D {
 		for (const c of cands) {
 			for (; i < c.length; i += step) {
 				if (this === c[i]) continue;
+				if (!follow[c[i].si] && !avoid[c[i].si]) continue;
 
 				if (simple) {
 					const d = this.sqrDist(c[i]);
-					if (d < g.sqVis) {
+					if (d < sqVis) {
 						ns.push(c[i]);
 						ds.push(d);
 					}
@@ -61,7 +75,7 @@ class Boid extends V2D {
 					// rotate into the boid's local frame (+x = heading)
 					const rx = wx * cos + wy * sin;
 					const ry = wy * cos - wx * sin;
-					if (visionContains(rx, ry)) {
+					if (visionContains(rx, ry, sp)) {
 						ns.push(c[i]);
 						ds.push(wx * wx + wy * wy);
 					}
@@ -76,48 +90,73 @@ class Boid extends V2D {
 	flock(flock) {
 		this.acc.zero();
 
+		const sp = this.sp;
+		const follow = sp.follow;
+		const avoid = sp.avoid;
+
 		const aln = new V2D();
 		const csn = new V2D();
 		const sep = new V2D();
+		const flee = new V2D();
 
 		let [ns, ds] = this.neighbors(flock);
 
+		let nf = 0;
+		let na = 0;
 		let i = 0;
 		for (const other of ns) {
-			// alignment is the average of velocity * bias strength ^ dot
-			const b = opt.bias ** other.vel.dot(this.vel);
-			aln.sclAdd(other.vel, b);
-
-			// cohesion finds the average of positions
-			csn.add(other);
-
-			// separation is stronger for closer boids, so it's multiplied by d
 			const d = 1 / (ds[i] || 0.00001);
-			sep.x += (this.x - other.x) * d;
-			sep.y += (this.y - other.y) * d;
+
+			if (follow[other.si]) {
+				// alignment is the average of velocity * bias strength ^ dot
+				const b = sp.bias ** other.vel.dot(this.vel);
+				aln.sclAdd(other.vel, b);
+
+				// cohesion finds the average of positions
+				csn.add(other);
+
+				// separation is stronger for closer boids, so it's multiplied
+				// by d
+				sep.x += (this.x - other.x) * d;
+				sep.y += (this.y - other.y) * d;
+
+				nf++;
+			}
+
+			// avoided species are fled from like separation, but with their
+			// own strength
+			if (avoid[other.si]) {
+				flee.x += (this.x - other.x) * d;
+				flee.y += (this.y - other.y) * d;
+
+				na++;
+			}
 
 			i++;
 		}
 
-		if (ns.length > 0) {
-			aln.setMag(opt.maxSpeed).sub(this.vel).max(opt.maxForce);
+		if (nf > 0) {
+			aln.setMag(sp.maxSpeed).sub(this.vel).max(sp.maxForce);
 
-			csn.div(ns.length)
+			csn.div(nf)
 				.sub(this)
-				.setMag(opt.maxSpeed)
+				.setMag(sp.maxSpeed)
 				.sub(this.vel)
-				.max(opt.maxForce);
+				.max(sp.maxForce);
 
-			sep.setMag(opt.maxSpeed).sub(this.vel).max(opt.maxForce);
+			sep.setMag(sp.maxSpeed).sub(this.vel).max(sp.maxForce);
 		}
 
-		this.acc.sclAdd(aln, opt.alignment);
-		this.acc.sclAdd(csn, opt.cohesion);
-		this.acc.sclAdd(sep, opt.separation);
+		if (na > 0) flee.setMag(sp.maxSpeed).sub(this.vel).max(sp.maxForce);
+
+		this.acc.sclAdd(aln, sp.alignment);
+		this.acc.sclAdd(csn, sp.cohesion);
+		this.acc.sclAdd(sep, sp.separation);
+		this.acc.sclAdd(flee, sp.avoidForce);
 	}
 
 	interact() {
-		if (opt.particle || opt.vision === 0) {
+		if (opt.particle || this.sp.vision === 0) {
 			this.acc.zero();
 		}
 
@@ -151,12 +190,14 @@ class Boid extends V2D {
 	}
 
 	update() {
+		const sp = this.sp;
+
 		if (opt.avoidEdges && opt.edgeMargin > 0) {
 			const m = opt.edgeMargin;
 			// linear ramp from 0 at the margin boundary; the peak is sized so
 			// the ramp's work over the band is double what's needed to stop a
 			// maxSpeed boid hitting the edge head-on
-			const f = (2 * opt.maxSpeed * opt.maxSpeed) / (m * m);
+			const f = (2 * sp.maxSpeed * sp.maxSpeed) / (m * m);
 			if (this.x < m) this.acc.x += (m - this.x) * f;
 			else if (this.x > g.width - m)
 				this.acc.x -= (this.x - (g.width - m)) * f;
@@ -167,16 +208,19 @@ class Boid extends V2D {
 
 		this.vel.sclAdd(this.acc, g.delta);
 
-		if (opt.drag) this.vel.mult(1 - opt.drag);
+		if (sp.drag) this.vel.mult(1 - sp.drag);
 
-		if (opt.noise) this.vel.rotate(random(-g.noiseRange, g.noiseRange));
-
-		if (opt.minSpeed) {
-			if (this.vel.sqrMag() === 0) this.vel.random(opt.minSpeed);
-			else this.vel.min(opt.minSpeed);
+		if (sp.noise) {
+			const r = (Math.PI / 80) * sp.noise;
+			this.vel.rotate(random(-r, r));
 		}
 
-		this.vel.max(opt.maxSpeed);
+		if (sp.minSpeed) {
+			if (this.vel.sqrMag() === 0) this.vel.random(sp.minSpeed);
+			else this.vel.min(sp.minSpeed);
+		}
+
+		this.vel.max(sp.maxSpeed);
 		this.sclAdd(this.vel, g.delta);
 
 		if (opt.bounce) {
@@ -200,6 +244,8 @@ class Boid extends V2D {
 	}
 
 	show() {
+		const sp = this.sp;
+
 		this.shape = this.getShape();
 		this.shape.x = this.x;
 		this.shape.y = this.y;
@@ -212,7 +258,7 @@ class Boid extends V2D {
 		this.area.rotation = this.shape.rotation;
 
 		if (opt.stretch) {
-			const t = constrain(this.vel.mag() / opt.maxSpeed, 0, 1);
+			const t = constrain(this.vel.mag() / sp.maxSpeed, 0, 1);
 			const w = 1.4 - 0.9 * t;
 			this.shape.scale.y = w;
 			this.shape.scale.x = 1 / w;
@@ -221,9 +267,17 @@ class Boid extends V2D {
 			this.shape.scale.y = 1;
 		}
 
+		// the border mirrors the body's transform but is never tinted, so it
+		// keeps the exact species color even with hues on
+		this.border.x = this.shape.x;
+		this.border.y = this.shape.y;
+		this.border.rotation = this.shape.rotation;
+		this.border.scale.x = this.shape.scale.x;
+		this.border.scale.y = this.shape.scale.y;
+
 		if (opt.hues)
 			this.shape.tint = hsv(
-				constrain(this.vel.mag() / (opt.maxSpeed * 2), 0, 1),
+				constrain(this.vel.mag() / (sp.maxSpeed * 2), 0, 1),
 				1,
 				1
 			);
@@ -239,7 +293,10 @@ class Boid extends V2D {
 
 	getShape() {
 		if (this.shapeMode !== g.shapeMode) {
+			const sp = this.sp;
+
 			this.shape.clear();
+			this.border.clear();
 
 			if (!opt.hideBoids) {
 				this.shape.beginFill(0xffffff);
@@ -250,17 +307,24 @@ class Boid extends V2D {
 				this.shape.lineTo(-6, 4);
 				this.shape.lineTo(6, 0);
 				this.shape.endFill();
+
+				this.border.lineStyle(1.5, sp.color);
+				this.border.moveTo(6, 0);
+				this.border.lineTo(-6, -4);
+				this.border.lineTo(-4, 0);
+				this.border.lineTo(-6, 4);
+				this.border.lineTo(6, 0);
 			}
 
 			this.area.clear();
 			if (opt.areas || opt.outlines) {
 				const k = opt.halfAreas ? 0.5 : 1;
-				const v = opt.vision * k;
-				const cx = visionCenterX() * k;
+				const v = sp.vision * k;
+				const cx = visionCenterX(sp) * k;
 
 				this.area.beginFill(0xffffff, opt.areas ? 0.03 : 0);
 				this.area.lineStyle(opt.outlines ? 0.5 : 0, 0xffffff, 0.2);
-				switch (opt.visionShape) {
+				switch (sp.visionShape) {
 					case 1:
 						this.area.drawRect(cx - v, -v, 2 * v, 2 * v);
 						break;
@@ -272,10 +336,10 @@ class Boid extends V2D {
 						break;
 					case 4: {
 						const lo =
-							((opt.visionArcDir - opt.visionArc / 2) * Math.PI) /
+							((sp.visionArcDir - sp.visionArc / 2) * Math.PI) /
 							180;
 						const hi =
-							((opt.visionArcDir + opt.visionArc / 2) * Math.PI) /
+							((sp.visionArcDir + sp.visionArc / 2) * Math.PI) /
 							180;
 
 						const sector = (a, b) => {
@@ -305,6 +369,7 @@ class Boid extends V2D {
 			}
 
 			this.shape.alpha = 0.8;
+			this.border.alpha = 0.9;
 			this.area.alpha = 0.8;
 
 			this.shapeMode = g.shapeMode;
@@ -315,6 +380,7 @@ class Boid extends V2D {
 
 	destroy() {
 		this.shape.destroy();
+		this.border.destroy();
 		this.area.destroy();
 		this.desired.destroy();
 	}

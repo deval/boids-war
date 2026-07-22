@@ -1,6 +1,5 @@
 class Flock {
-	constructor(boids) {
-		this.length = boids;
+	constructor() {
 		this.boids = [];
 		this.buckets = [];
 		this.space = {
@@ -11,21 +10,21 @@ class Flock {
 			width: null,
 			height: null
 		};
+		this.rebuild();
 		this.organize();
-		this.reset();
 	}
 
 	update() {
-		if (this.length !== opt.boids) this.resize(opt.boids);
+		this.reconcile();
 
 		for (const boid of this.boids) boid.update();
 
-		if (opt.particle || opt.vision === 0)
+		if (opt.particle) {
 			for (const boid of this.boids) boid.interact();
-		else {
+		} else {
 			this.organize();
 			for (const boid of this.boids) {
-				boid.flock(flock);
+				if (boid.sp.vision > 0) boid.flock(flock);
 				boid.interact();
 			}
 		}
@@ -43,28 +42,56 @@ class Flock {
 		} else this.space.shape.alpha = 0;
 	}
 
-	resize(n) {
-		this.length = n;
+	// matches the boid population to the per-species counts, adding or
+	// removing only what changed; index shifts (species removal, imports)
+	// force a full rebuild
+	reconcile() {
+		const ns = opt.species.length;
+		const counts = new Array(ns).fill(0);
 
-		if (this.boids.length > n) {
-			while (this.boids.length > n) {
-				this.boids.pop().destroy();
+		for (const boid of this.boids) {
+			if (boid.si >= ns) return this.rebuild();
+			counts[boid.si]++;
+		}
+
+		for (let si = 0; si < ns; si++) {
+			const want = opt.species[si].count;
+			let have = counts[si];
+
+			for (; have < want; have++) this.boids.push(new Boid(si));
+
+			if (have > want) {
+				for (let i = this.boids.length - 1; i >= 0 && have > want; i--) {
+					if (this.boids[i].si === si) {
+						this.boids[i].destroy();
+						this.boids.splice(i, 1);
+						have--;
+					}
+				}
 			}
-		} else {
-			for (let i = this.boids.length; i < n; i++) {
-				this.boids.push(new Boid(i));
+		}
+	}
+
+	rebuild() {
+		while (this.boids.length) this.boids.pop().destroy();
+
+		for (let si = 0; si < opt.species.length; si++) {
+			for (let i = 0; i < opt.species[si].count; i++) {
+				this.boids.push(new Boid(si));
 			}
 		}
 	}
 
 	reset() {
-		const l = this.length;
-		this.resize(0);
-		this.resize(l);
+		this.rebuild();
 	}
 
 	organize() {
-		let s = opt.vision;
+		// one shared grid sized for the biggest vision range, with a floor so
+		// tiny visions don't explode the bucket count
+		let s = 25;
+		for (const sp of opt.species) s = max(s, sp.vision);
+
 		if (
 			this.space.scale !== s ||
 			this.space.gwidth !== g.width ||
@@ -110,18 +137,19 @@ class Flock {
 	candidates(boid) {
 		const cand = [];
 		const s = this.space.scale;
+		const sp = boid.sp;
 
 		// search around the vision area's world center, which may be offset
 		// from the boid, with enough reach to cover the shape's corners
 		let x = boid.x;
 		let y = boid.y;
 		let reach = 1;
-		if (opt.visionShape !== 0 || opt.visionOffset !== 0) {
+		if (sp.visionShape !== 0 || sp.visionOffset !== 0) {
 			const a = boid.vel.angle();
-			const cx = visionCenterX();
+			const cx = visionCenterX(sp);
 			x += cx * Math.cos(a);
 			y += cx * Math.sin(a);
-			reach = Math.ceil(visionBound() / s);
+			reach = Math.ceil(visionBound(sp) / s);
 		}
 
 		const row = Math.floor(y / s);

@@ -26,18 +26,18 @@ function constrain(x, a, b) {
 
 // vision-area geometry, shared by the neighbor test (Boid.neighbors) and the
 // drawn area (Boid.getShape); local frame: +x = heading, area centered at
-// (visionCenterX(), 0)
+// (visionCenterX(sp), 0); sp is a species settings object from opt.species
 
-function visionCenterX() {
-	return opt.visionOffset * opt.vision;
+function visionCenterX(sp) {
+	return sp.visionOffset * sp.vision;
 }
 
 // (rx, ry) must already be rotated into the boid's local frame
-function visionContains(rx, ry) {
-	const v = opt.vision;
-	const cx = visionCenterX();
+function visionContains(rx, ry, sp) {
+	const v = sp.vision;
+	const cx = visionCenterX(sp);
 
-	switch (opt.visionShape) {
+	switch (sp.visionShape) {
 		case 1: // rectangle
 			return Math.abs(rx - cx) < v && Math.abs(ry) < v;
 		case 2: // triangle pointing forward
@@ -47,26 +47,26 @@ function visionContains(rx, ry) {
 		case 4: {
 			// two field-of-view arcs mirrored across the heading axis
 			const dx = rx - cx;
-			if (dx * dx + ry * ry >= g.sqVis) return false;
+			if (dx * dx + ry * ry >= v * v) return false;
 			// folding with |ry| tests both eyes at once; phi and the arc
 			// center both live in [0, pi], so no angle wraparound is needed
 			const phi = Math.atan2(Math.abs(ry), dx);
-			const dir = (opt.visionArcDir * Math.PI) / 180;
-			const half = (opt.visionArc * Math.PI) / 360;
+			const dir = (sp.visionArcDir * Math.PI) / 180;
+			const half = (sp.visionArc * Math.PI) / 360;
 			return Math.abs(phi - dir) <= half;
 		}
 		default: {
 			const dx = rx - cx;
-			return dx * dx + ry * ry < g.sqVis;
+			return dx * dx + ry * ry < v * v;
 		}
 	}
 }
 
 // bounding radius measured from the area's center
-function visionBound() {
-	return opt.visionShape === 0 || opt.visionShape === 4
-		? opt.vision
-		: opt.vision * Math.SQRT2;
+function visionBound(sp) {
+	return sp.visionShape === 0 || sp.visionShape === 4
+		? sp.vision
+		: sp.vision * Math.SQRT2;
 }
 
 function hsv(h, s, v) {

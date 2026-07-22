@@ -169,6 +169,32 @@
 				<label for="bounce"> bounce off of edges</label>
 			</div>
 
+			<div>
+				<input
+					type="checkbox"
+					id="avoidEdges"
+					data-model="avoidEdges"
+				/>
+				<label for="avoidEdges"> steer away from edges</label>
+				<span class="tooltip">
+					?
+					<span class="tip">
+						boids near an edge turn back toward the middle instead of
+						hitting it; the margin sets how far from the edge they
+						start turning.
+					</span>
+				</span>
+			</div>
+
+			<p>edge margin <span data-show="edgeMargin"></span></p>
+			<input
+				type="range"
+				min="10"
+				max="200"
+				step="5"
+				data-model="edgeMargin"
+			/>
+
 			<p>
 				movement accuracy
 				<span class="tooltip">

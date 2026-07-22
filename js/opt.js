@@ -27,6 +27,8 @@ const opt = (() => {
 
 		particle: false,
 		bounce: false,
+		avoidEdges: false,
+		edgeMargin: 50,
 		accuracyPower: 5,
 		accuracy: 32,
 		vision: 25,
@@ -63,6 +65,8 @@ const opt = (() => {
 		halfAreas: "y",
 
 		bounce: "i",
+		avoidEdges: "E",
+		edgeMargin: "F",
 		particle: "j",
 		accuracyPower: "k",
 		vision: "l",

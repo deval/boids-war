@@ -151,6 +151,20 @@ class Boid extends V2D {
 	}
 
 	update() {
+		if (opt.avoidEdges && opt.edgeMargin > 0) {
+			const m = opt.edgeMargin;
+			// linear ramp from 0 at the margin boundary; the peak is sized so
+			// the ramp's work over the band is double what's needed to stop a
+			// maxSpeed boid hitting the edge head-on
+			const f = (2 * opt.maxSpeed * opt.maxSpeed) / (m * m);
+			if (this.x < m) this.acc.x += (m - this.x) * f;
+			else if (this.x > g.width - m)
+				this.acc.x -= (this.x - (g.width - m)) * f;
+			if (this.y < m) this.acc.y += (m - this.y) * f;
+			else if (this.y > g.height - m)
+				this.acc.y -= (this.y - (g.height - m)) * f;
+		}
+
 		this.vel.sclAdd(this.acc, g.delta);
 
 		if (opt.drag) this.vel.mult(1 - opt.drag);
